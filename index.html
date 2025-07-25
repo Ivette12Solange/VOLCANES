@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Geoportal Ecuador - Observatorios Vulcanológicos</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<style>
+  body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+  #map { height: 100vh; }
+
+  .header {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    max-width: 300px;
+  }
+
+  .header h1 {
+    margin: 0 0 10px 0;
+    font-size: 18px;
+    color: #2d3748;
+    border-bottom: 2px solid #e53e3e;
+    padding-bottom: 5px;
+  }
+
+  .header p {
+    margin: 0;
+    font-size: 12px;
+    color: #666;
+  }
+
+  .layer-control {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    min-width: 200px;
+  }
+
+  .layer-control h4 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    color: #2d3748;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 8px;
+  }
+
+  .layer-control label {
+    display: flex;
+    align-items: center;
+    margin: 8px 0;
+    cursor: pointer;
+    font-size: 14px;
+    color: #4a5568;
+    transition: color 0.2s;
+  }
+
+  .layer-control label:hover {
+    color: #2d3748;
+  }
+
+  .layer-control input[type="checkbox"] {
+    margin-right: 8px;
+    transform: scale(1.2);
+  }
+
+  .loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2000;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    text-align: center;
+    font-size: 16px;
+    color: #2d3748;
+  }
+
+  .loading::after {
+    content: '';
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e2e8f0;
+    border-radius: 50%;
+    border-top-color: #e53e3e;
+    animation: spin 1s ease-in-out infinite;
+    margin-left: 10px;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .error-message {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fed7d7;
+    color: #c53030;
+    padding: 10px 20px;
+    border-radius: 6px;
+    border-left: 4px solid #e53e3e;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    z-index: 1000;
+    max-width: 400px;
+    font-size: 14px;
+  }
+
+  .info-panel {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    font-size: 12px;
+    color: #666;
+    max-width: 250px;
+  }
+
+  /* Estilos para el sistema de reportes */
+  .report-panel {
+    position: absolute;
+    top: 200px;
+    left: 10px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    width: 320px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .report-panel.collapsed {
+    height: 50px;
+    overflow: hidden;
+  }
+
+  .report-panel h4 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    color: #2d3748;
+    border-bottom: 2px solid #f56565;
+    padding-bottom: 8px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .toggle-icon {
+    font-size: 18px;
+    transition: transform 0.3s;
+  }
+
+  .report-panel.collapsed .toggle-icon {
+    transform: rotate(180deg);
+  }
+
+  .report-form {
+    margin-bottom: 20px;
+  }
+
+  .form-group {
+    margin-bottom: 15px;
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #2d3748;
+    font-size: 13px;
+  }
+
+  .form-group select,
+  .form-group input,
+  .form-group textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 13px;
+    box-sizing: border-box;
+  }
+
+  .form-group textarea {
+    height: 60px;
+    resize: vertical;
+  }
+
+  .btn-report {
+    background: #f56565;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    width: 100%;
+    transition: background-color 0.3s;
+  }
+
+  .btn-report:hover {
+    background: #e53e3e;
+  }
+
+  .btn-report:disabled {
+    background: #cbd5e0;
+    cursor: not-allowed;
+  }
+
+  .report-list {
+    border-top: 1px solid #e2e8f0;
+    padding-top: 15px;
+  }
+
+  .report-item {
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+    font-size: 12px;
+  }
+
+  .report-item.critico {
+    border-left: 4px solid #e53e3e;
+  }
+
+  .report-item.alto {
+    border-left: 4px solid #f56500;
+  }
+
+  .report-item.medio {
+    border-left: 4px solid #ecc94b;
+  }
+
+  .report-item.bajo {
+    border-left: 4px solid #38a169;
+  }
+  
+  /* Nuevo estilo para reportes atendidos/pendientes */
+  .report-item.atendido {
+    border-left: 4px solid #48bb78; /* Verde para atendido */
+    background: #f0fff4;
+  }
+  .report-item.pendiente {
+    border-left: 4px solid #ed8936; /* Naranja para pendiente */
+    background: #fffaf0;
+  }
+
+
+  .report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+
+  .report-type {
+    font-weight: bold;
+    color: #2d3748;
+  }
+
+  .report-priority {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    font-weight: bold;
+  }
+
+  .report-priority.critico {
+    background: #fed7d7;
+    color: #c53030;
+  }
+
+  .report-priority.alto {
+    background: #feebc8;
+    color: #c05621;
+  }
+
+  .report-priority.medio {
+    background: #fefcbf;
+    color: #975a16;
+  }
+
+  .report-priority.bajo {
+    background: #c6f6d5;
+    color: #22543d;
+  }
+
+  .report-location {
+    color: #4a5568;
+    font-style: italic;
+    margin-bottom: 5px;
+  }
+
+  .report-description {
+    color: #2d3748;
+    line-height: 1.4;
+  }
+
+  .report-time {
+    color: #718096;
+    font-size: 11px;
+    margin-top: 8px;
+    text-align: right;
+  }
+
+  .success-message {
+    background: #c6f6d5;
+    color: #22543d;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    font-size: 13px;
+    border-left: 4px solid #38a169;
+  }
+
+  .report-stats {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    font-size: 11px;
+  }
+
+  .stat-item {
+    text-align: center;
+    padding: 8px;
+    background: #f7fafc;
+    border-radius: 4px;
+    min-width: 60px;
+  }
+
+  .stat-number {
+    display: block;
+    font-size: 18px;
+    font-weight: bold;
+    color: #2d3748;
+  }
+
+  .stat-label {
+    color: #718096;
+    text-transform: uppercase;
+  }
+
+  /* Estilos para el botón de estado en el popup */
+  .btn-status-toggle {
+    background: #2d3748;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-top: 10px;
+    width: 100%;
+    transition: background-color 0.3s;
+  }
+  .btn-status-toggle.atendido {
+      background: #48bb78;
+  }
+  .btn-status-toggle.pendiente {
+      background: #ed8936;
+  }
+  .btn-status-toggle:hover {
+    opacity: 0.9;
+  }
+
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🌋 Observatorios Vulcanológicos</h1>
+  <p>Red de monitoreo vulcanológico del Ecuador</p>
+</div>
+
+<div class="layer-control">
+  <h4>📊 Capas de Información</h4>
+  <label><input type="checkbox" id="observatorios" checked> 🌋 Observatorios Vulcanológicos</label>
+  <label><input type="checkbox" id="vias" checked> 🛣️ Vías</label>
+  <label><input type="checkbox" id="poblaciones" checked> 🏘️ Poblaciones</label>
+  <label><input type="checkbox" id="aeropuertos" checked> ✈️ Aeropuertos</label>
+  <label><input type="checkbox" id="cantones" checked> 🏛️ Cantones</label>
+  <label><input type="checkbox" id="reportes" checked> 🚨 Reportes de Emergencia</label>
+</div>
+
+<div class="report-panel" id="reportPanel">
+  <h4 onclick="toggleReportPanel()">
+    🚨 Sistema de Reportes de Emergencia
+    <span class="toggle-icon">▼</span>
+  </h4>
+
+  <div class="report-content">
+    <div class="report-stats">
+      <div class="stat-item">
+        <span class="stat-number" id="totalReportes">0</span>
+        <span class="stat-label">Total</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-number" id="reportesPendientes">0</span>
+        <span class="stat-label">Pendientes</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-number" id="reportesAtendidos">0</span>
+        <span class="stat-label">Atendidos</span>
+      </div>
+    </div>
+
+    <div id="successMessage" class="success-message" style="display: none;">
+      ✅ Reporte enviado exitosamente
+    </div>
+
+    <form class="report-form" id="reportForm">
+      <div class="form-group">
+        <label for="reportType">🏷️ Tipo de Problema:</label>
+        <select id="reportType" required>
+          <option value="">Seleccionar tipo...</option>
+          <option value="via-bloqueada">🚧 Vía Bloqueada</option>
+          <option value="via-danada">🛣️ Vía Dañada</option>
+          <option value="poblacion-evacuada">🏠 Población Evacuada</option>
+          <option value="servicios-cortados">⚡ Servicios Públicos Cortados</option>
+          <option value="infraestructura-danada">🏗️ Infraestructura Dañada</option>
+          <option value="emergencia-medica">🚑 Emergencia Médica</option>
+          <option value="otro">❓ Otro</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="reportPriority">⚠️ Nivel de Prioridad:</label>
+        <select id="reportPriority" required>
+          <option value="">Seleccionar prioridad...</option>
+          <option value="critico">🔴 Crítico - Riesgo de vida</option>
+          <option value="alto">🟠 Alto - Requiere atención inmediata</option>
+          <option value="medio">🟡 Medio - Importante pero no urgente</option>
+          <option value="bajo">🟢 Bajo - Informativo</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="reportLocation">📍 Ubicación:</label>
+        <input type="text" id="reportLocation" placeholder="Ej: Quito, Av. 10 de Agosto" required>
+        <small style="color: #718096; font-size: 11px;">
+          Haz clic en el mapa para seleccionar ubicación automáticamente
+        </small>
+      </div>
+
+      <div class="form-group">
+        <label for="reportDescription">📝 Descripción:</label>
+        <textarea id="reportDescription" placeholder="Describe el problema y la situación actual..." required></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="reportContact">📞 Contacto (opcional):</label>
+        <input type="text" id="reportContact" placeholder="Nombre o teléfono para seguimiento">
+      </div>
+
+      <button type="submit" class="btn-report" id="submitBtn">
+        🚨 Enviar Reporte de Emergencia
+      </button>
+    </form>
+
+    <div class="report-list" id="reportList">
+      <h5 style="margin: 0 0 10px 0; color: #2d3748;">📋 Reportes Recientes:</h5>
+      <div id="reportItems">
+        <p style="color: #718096; font-style: italic; text-align: center; padding: 20px;">
+          No hay reportes registrados
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="info-panel">
+  <strong>📍 Total de Observatorios:</strong> <span id="total-observatorios">Cargando...</span><br>
+  <strong>🔴 Estado Activo:</strong> <span id="activos">-</span><br>
+  <strong>⚫ Estado Inactivo:</strong> <span id="inactivos">-</span>
+</div>
+
+<div id="loading" class="loading">
+  Conectando con Supabase...
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+  // Configuración de Supabase
+  const SUPABASE_URL = 'https://pgecdgilxbmtuerqzrbu.supabase.co'; // Asegúrate que esta URL sea correcta para tu proyecto
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBnZWNkZ2lseGJtdHVlcnF6cmJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI5ODU2MzIsImV4cCI6MjA2ODU2MTYzMn0.vORPd-9a4X67oFTVbSYU_WAgYD_qkORinnk88fYOIRw'; // Asegúrate que esta KEY sea correcta para tu proyecto
+
+  // Almacén local de reportes (se sincronizará con Supabase)
+  let reports = [];
+  let reportMarkers = {}; // Para mantener referencia a los marcadores por ID de reporte
+
+  // Crear el mapa centrado en Ecuador
+  const map = L.map('map', {
+    center: [-1.8312, -78.1834],
+    zoom: 7,
+    zoomControl: true
+  });
+
+  // Variable para almacenar el marcador de ubicación seleccionada
+  let selectedLocationMarker = null;
+
+  // Capas base
+  const baseLayers = {
+    'OpenStreetMap': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19
+    }),
+    'Satelital': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '© Esri',
+      maxZoom: 17
+    }),
+    'Topográfico': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenTopoMap',
+      maxZoom: 17
+    }),
+    'CartoDB Light': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© CartoDB',
+      maxZoom: 19
+    })
+  };
+
+  // Añadir capa base por defecto
+  baseLayers['OpenStreetMap'].addTo(map);
+
+  // Grupos de capas
+  let layerGroups = {
+    observatorios: L.layerGroup(),
+    cantones: L.layerGroup(),
+    vias: L.layerGroup(),
+    poblaciones: L.layerGroup(),
+    aeropuertos: L.layerGroup(),
+    reportes: L.layerGroup()
+  };
+
+  // Variable para almacenar el buffer actual
+  let currentBuffer = null;
+
+  // Función para alternar el panel de reportes
+  window.toggleReportPanel = function() {
+    const panel = document.getElementById('reportPanel');
+    panel.classList.toggle('collapsed');
+  };
+
+  // Función para manejar clics en el mapa para seleccionar ubicación
+  map.on('click', function(e) {
+    const lat = e.latlng.lat.toFixed(6);
+    const lng = e.latlng.lng.toFixed(6);
+
+    // Remover marcador anterior si existe
+    if (selectedLocationMarker) {
+      map.removeLayer(selectedLocationMarker);
+    }
+
+    // Crear nuevo marcador
+    selectedLocationMarker = L.marker([lat, lng], {
+      icon: L.icon({
+        iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+          <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
+            <path fill="#f56565" stroke="#fff" stroke-width="2" d="M12.5 0C5.6 0 0 5.6 0 12.5S12.5 41 12.5 41 25 19.4 25 12.5 19.4 0 12.5 0z"/>
+            <circle fill="#fff" cx="12.5" cy="12.5" r="6"/>
+          </svg>
+        `),
+        iconSize: [25, 41],
+        iconAnchor: [12, 41]
+      })
+    }).addTo(map);
+
+    // Actualizar el campo de ubicación
+    document.getElementById('reportLocation').value = `${lat}, ${lng}`;
+
+    // Popup temporal
+    selectedLocationMarker.bindPopup('📍 Ubicación seleccionada para reporte').openPopup();
+  });
+
+  // Función para manejar el envío de reportes a Supabase
+  document.getElementById('reportForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true; // Deshabilitar botón para evitar envíos duplicados
+
+    if (!selectedLocationMarker) {
+      showError('Por favor, selecciona una ubicación en el mapa.');
+      submitBtn.disabled = false;
+      return;
+    }
+
+    const coordinates = selectedLocationMarker.getLatLng();
+    const newReport = {
+      tipo_reporte: document.getElementById('reportType').value,
+      prioridad: document.getElementById('reportPriority').value,
+      ubicacion: document.getElementById('reportLocation').value,
+      descripcion: document.getElementById('reportDescription').value,
+      contacto: document.getElementById('reportContact').value,
+      latitud: coordinates.lat,
+      longitud: coordinates.lng,
+      // Crear geometría PostGIS ST_PointFromText para Supabase
+      // O si Supabase soporta GeoJSON nativo, usar: JSON.stringify({ type: 'Point', coordinates: [coordinates.lng, coordinates.lat] })
+      geom: `SRID=4326;POINT(${coordinates.lng} ${coordinates.lat})`, // Formato WKT para PostGIS
+      fecha_creacion: new Date().toISOString(),
+      fecha_actualizacion: new Date().toISOString(),
+      estado: 'pendiente' // Estado inicial
+    };
+
+    try {
+      showLoading('Enviando reporte...');
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/reportes_emergencia`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation' // Para obtener el objeto insertado en la respuesta
+        },
+        body: JSON.stringify(newReport)
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Error ${response.status}: ${response.statusText} - ${errorBody}`);
+      }
+
+      const insertedReport = (await response.json())[0]; // Supabase devuelve un array
+      console.log('Reporte enviado exitosamente:', insertedReport);
+
+      // Añadir el nuevo reporte al array local y al mapa
+      reports.unshift(insertedReport);
+      addReportToMap(insertedReport);
+
+      // Actualizar UI
+      updateReportsList();
+      updateReportStats();
+      showSuccessMessage('Reporte enviado exitosamente');
+      resetForm();
+
+    } catch (error) {
+      console.error('Error al enviar reporte:', error);
+      showError(`Error al enviar reporte: ${error.message}`);
+    } finally {
+      hideLoading();
+      submitBtn.disabled = false;
+    }
+  });
+
+  // Función para agregar reporte al mapa
+  function addReportToMap(report) {
+    const lat = report.latitud;
+    const lng = report.longitud;
+
+    if (!lat || !lng) {
+      console.warn('Reporte sin coordenadas válidas, no se añadirá al mapa:', report);
+      return;
+    }
+
+    const priorityColors = {
+      'critico': '#e53e3e',
+      'alto': '#f56500',
+      'medio': '#ecc94b',
+      'bajo': '#38a169'
+    };
+
+    const statusColors = {
+        'pendiente': '#ed8936', // Naranja
+        'atendido': '#48bb78' // Verde
+    };
+
+    const typeIcons = {
+      'via-bloqueada': '🚧',
+      'via-danada': '🛣️',
+      'poblacion-evacuada': '🏠',
+      'servicios-cortados': '⚡',
+      'infraestructura-danada': '🏗️',
+      'emergencia-medica': '🚑',
+      'otro': '❓'
+    };
+
+    // Remover marcador existente si se está actualizando
+    if (reportMarkers[report.id]) {
+        layerGroups.reportes.removeLayer(reportMarkers[report.id]);
+    }
+
+    const marker = L.circleMarker([lat, lng], {
+      radius: report.prioridad === 'critico' ? 12 : report.prioridad === 'alto' ? 10 : 8,
+      fillColor: statusColors[report.estado] || priorityColors[report.prioridad], // Color por estado, si no, por prioridad
+      color: '#fff',
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 0.8
+    });
+
+    const popupContent = `
+      <div style="min-width: 250px;">
+        <h3 style="margin: 0 0 10px 0; color: ${priorityColors[report.prioridad]};">
+          ${typeIcons[report.tipo_reporte] || '🚨'} Reporte #${report.id}
+        </h3>
+        <p><strong>🏷️ Tipo:</strong> ${getTypeLabel(report.tipo_reporte)}</p>
+        <p><strong>⚠️ Prioridad:</strong>
+          <span style="color: ${priorityColors[report.prioridad]}; font-weight: bold; text-transform: uppercase;">
+            ${report.prioridad}
+          </span>
+        </p>
+        <p><strong>📍 Ubicación:</strong> ${report.ubicacion}</p>
+        <p><strong>📝 Descripción:</strong> ${report.descripcion}</p>
+        ${report.contacto ? `<p><strong>📞 Contacto:</strong> ${report.contacto}</p>` : ''}
+        <p><strong>🕒 Reportado:</strong> ${formatDateTime(report.fecha_creacion)}</p>
+        <p><strong>🔄 Estado:</strong> <span style="font-weight: bold; color: ${statusColors[report.estado]}">${report.estado.toUpperCase()}</span></p>
+        <button class="btn-status-toggle ${report.estado}" onclick="updateReportStatus(${report.id}, '${report.estado === 'pendiente' ? 'atendido' : 'pendiente'}')">
+          Marcar como ${report.estado === 'pendiente' ? 'Atendido' : 'Pendiente'}
+        </button>
+      </div>
+    `;
+
+    marker.bindPopup(popupContent);
+    layerGroups.reportes.addLayer(marker);
+    reportMarkers[report.id] = marker; // Almacenar referencia al marcador
+  }
+
+  // Función para actualizar el estado de un reporte en Supabase
+  window.updateReportStatus = async function(reportId, newStatus) {
+      try {
+          showLoading(`Actualizando reporte #${reportId}...`);
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/reportes_emergencia?id=eq.${reportId}`, {
+              method: 'PATCH',
+              headers: {
+                  'apikey': SUPABASE_KEY,
+                  'Authorization': `Bearer ${SUPABASE_KEY}`,
+                  'Content-Type': 'application/json',
+                  'Prefer': 'return=representation'
+              },
+              body: JSON.stringify({
+                  estado: newStatus,
+                  fecha_actualizacion: new Date().toISOString(),
+                  fecha_resolucion: newStatus === 'atendido' ? new Date().toISOString() : null // Establecer fecha de resolución si se atiende
+              })
+          });
+
+          if (!response.ok) {
+              const errorBody = await response.text();
+              throw new Error(`Error ${response.status}: ${response.statusText} - ${errorBody}`);
+          }
+
+          const updatedReport = (await response.json())[0];
+          console.log('Reporte actualizado exitosamente:', updatedReport);
+
+          // Actualizar el reporte en el array local
+          const index = reports.findIndex(r => r.id === updatedReport.id);
+          if (index !== -1) {
+              reports[index] = updatedReport;
+          }
+
+          // Eliminar y volver a añadir el marcador para actualizar el popup y estilo
+          addReportToMap(updatedReport);
+          // Cerrar y abrir el popup para que se refresque
+          if (reportMarkers[updatedReport.id] && reportMarkers[updatedReport.id].getPopup().isOpen()) {
+              reportMarkers[updatedReport.id].getPopup().setContent(buildReportPopupContent(updatedReport)).openOn(map);
+          }
+
+          updateReportsList();
+          updateReportStats();
+          showSuccessMessage(`Estado de reporte #${reportId} actualizado a "${newStatus}"`);
+
+      } catch (error) {
+          console.error('Error al actualizar reporte:', error);
+          showError(`Error al actualizar reporte: ${error.message}`);
+      } finally {
+          hideLoading();
+      }
+  };
+
+  // Función para construir el contenido del popup (útil para refrescar)
+  function buildReportPopupContent(report) {
+    const priorityColors = {
+      'critico': '#e53e3e', 'alto': '#f56500', 'medio': '#ecc94b', 'bajo': '#38a169'
+    };
+    const statusColors = { 'pendiente': '#ed8936', 'atendido': '#48bb78' };
+    const typeIcons = {
+      'via-bloqueada': '🚧', 'via-danada': '🛣️', 'poblacion-evacuada': '🏠',
+      'servicios-cortados': '⚡', 'infraestructura-danada': '🏗️', 'emergencia-medica': '🚑', 'otro': '❓'
+    };
+
+    return `
+      <div style="min-width: 250px;">
+        <h3 style="margin: 0 0 10px 0; color: ${priorityColors[report.prioridad]};">
+          ${typeIcons[report.tipo_reporte] || '🚨'} Reporte #${report.id}
+        </h3>
+        <p><strong>🏷️ Tipo:</strong> ${getTypeLabel(report.tipo_reporte)}</p>
+        <p><strong>⚠️ Prioridad:</strong>
+          <span style="color: ${priorityColors[report.prioridad]}; font-weight: bold; text-transform: uppercase;">
+            ${report.prioridad}
+          </span>
+        </p>
+        <p><strong>📍 Ubicación:</strong> ${report.ubicacion}</p>
+        <p><strong>📝 Descripción:</strong> ${report.descripcion}</p>
+        ${report.contacto ? `<p><strong>📞 Contacto:</strong> ${report.contacto}</p>` : ''}
+        <p><strong>🕒 Reportado:</strong> ${formatDateTime(report.fecha_creacion)}</p>
+        <p><strong>🔄 Estado:</strong> <span style="font-weight: bold; color: ${statusColors[report.estado]}">${report.estado.toUpperCase()}</span></p>
+        <button class="btn-status-toggle ${report.estado}" onclick="updateReportStatus(${report.id}, '${report.estado === 'pendiente' ? 'atendido' : 'pendiente'}')">
+          Marcar como ${report.estado === 'pendiente' ? 'Atendido' : 'Pendiente'}
+        </button>
+      </div>
+    `;
+  }
+
+  // Función para obtener la etiqueta del tipo de reporte
+  function getTypeLabel(type) {
+    const labels = {
+      'via-bloqueada': 'Vía Bloqueada',
+      'via-danada': 'Vía Dañada',
+      'poblacion-evacuada': 'Población Evacuada',
+      'servicios-cortados': 'Servicios Públicos Cortados',
+      'infraestructura-danada': 'Infraestructura Dañada',
+      'emergencia-medica': 'Emergencia Médica',
+      'otro': 'Otro'
+    };
+    return labels[type] || type;
+  }
+
+  // Función para formatear fecha y hora
+  function formatDateTime(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleString('es-EC', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  // Función para actualizar la lista de reportes
+  function updateReportsList() {
+    const container = document.getElementById('reportItems');
+
+    if (reports.length === 0) {
+      container.innerHTML = `
+        <p style="color: #718096; font-style: italic; text-align: center; padding: 20px;">
+          No hay reportes registrados
+        </p>
+      `;
+      return;
+    }
+
+    container.innerHTML = reports.slice(0, 5).map(report => `
+      <div class="report-item ${report.prioridad} ${report.estado}">
+        <div class="report-header">
+          <span class="report-type">#${report.id} - ${getTypeLabel(report.tipo_reporte)}</span>
+          <span class="report-priority ${report.prioridad}">${report.prioridad}</span>
+        </div>
+        <div class="report-location">📍 ${report.ubicacion}</div>
+        <div class="report-description">${report.descripcion.substring(0, 100)}${report.descripcion.length > 100 ? '...' : ''}</div>
+        <div class="report-time">${formatDateTime(report.fecha_creacion)} - Estado: ${report.estado.toUpperCase()}</div>
+      </div>
+    `).join('');
+  }
+
+  // Función para actualizar estadísticas
+  function updateReportStats() {
+    const total = reports.length;
+    const pendientes = reports.filter(r => r.estado === 'pendiente').length;
+    const atendidos = reports.filter(r => r.estado === 'atendido').length;
+
+    document.getElementById('totalReportes').textContent = total;
+    document.getElementById('reportesPendientes').textContent = pendientes;
+    document.getElementById('reportesAtendidos').textContent = atendidos;
+  }
+
+  // Función para mostrar mensaje de éxito
+  function showSuccessMessage(message) {
+    const msgElem = document.getElementById('successMessage');
+    msgElem.textContent = message;
+    msgElem.style.display = 'block';
+    setTimeout(() => {
+      msgElem.style.display = 'none';
+    }, 3000);
+  }
+
+  // Función para resetear el formulario
+  function resetForm() {
+    document.getElementById('reportForm').reset();
+    if (selectedLocationMarker) {
+      map.removeLayer(selectedLocationMarker);
+      selectedLocationMarker = null;
+    }
+  }
+
+  // Función para realizar consultas a Supabase
+  async function querySupabase(tableName, select = '*', additionalParams = '') {
+    try {
+      const url = `${SUPABASE_URL}/rest/v1/${tableName}?select=${select}${additionalParams}`;
+      console.log(`Consultando: ${url}`);
+
+      const response = await fetch(url, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text(); // Captura el cuerpo del error para más detalles
+        throw new Error(`Error ${response.status}: ${response.statusText} - ${errorBody}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`Error consultando ${tableName}:`, error);
+      showError(`Error cargando ${tableName}: ${error.message}`);
+      return [];
+    }
+  }
+
+  // Función para convertir geometría PostGIS a GeoJSON (adaptada para puntos, si es necesario)
+  function parsePostGISGeometry(geom) {
+    if (!geom) return null;
+
+    try {
+      // Si ya es un objeto GeoJSON, devolverlo directamente
+      if (typeof geom === 'object' && geom.type) {
+        return geom;
+      }
+
+      // Intentar parsear como GeoJSON string
+      if (typeof geom === 'string') {
+        try {
+          const parsed = JSON.parse(geom);
+          if (parsed.type && parsed.coordinates) {
+            return parsed; // Es un GeoJSON string válido
+          }
+        } catch (e) {
+          // No es un JSON válido, intentar parsear WKT POINT
+          const pointMatch = geom.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
+          if (pointMatch) {
+            return {
+              type: 'Point',
+              coordinates: [parseFloat(pointMatch[1]), parseFloat(pointMatch[2])]
+            };
+          }
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error parseando geometría:', error);
+      return null;
+    }
+  }
+
+  // Función para cargar observatorios vulcanológicos
+  async function loadObservatorios() {
+    try {
+      showLoading('Cargando observatorios vulcanológicos...');
+
+      const data = await querySupabase('Red_Observatorios_Vulcanologicos');
+
+      if (!data || data.length === 0) {
+        console.warn('No se encontraron observatorios');
+        return;
+      }
+
+      let activosCount = 0;
+      let inactivosCount = 0;
+
+      data.forEach(item => {
+        // Usar latitud y longitud directamente si están disponibles
+        let coords = null;
+
+        if (item.latitud && item.longitud) {
+          coords = [parseFloat(item.longitud), parseFloat(item.latitud)];
+        } else if (item.geom) {
+          const geom = parsePostGISGeometry(item.geom);
+          if (geom && geom.coordinates) {
+            coords = geom.coordinates;
+          }
+        }
+
+        if (!coords) {
+          console.warn('No se pudieron obtener coordenadas para:', item.nombre);
+          return;
+        }
+
+        // Contar estados
+        if (item.estado && item.estado.toLowerCase().includes('activ')) {
+          activosCount++;
+        } else {
+          inactivosCount++;
+        }
+
+        // Crear marcador
+        const isActive = item.estado && item.estado.toLowerCase().includes('activ');
+        const marker = L.circleMarker([coords[1], coords[0]], {
+          radius: 10,
+          fillColor: isActive ? '#e53e3e' : '#718096',
+          color: '#fff',
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 0.8
+        });
+
+        // Tooltip permanente
+        marker.bindTooltip(item.nombre || 'Sin nombre', {
+          permanent: true,
+          direction: 'top',
+          className: 'observatory-tooltip',
+          offset: [0, -15]
+        });
+
+        // Popup con información detallada
+        const popupContent = `
+          <div style="min-width: 250px; font-family: Arial, sans-serif;">
+            <h3 style="margin: 0 0 15px 0; color: #e53e3e; border-bottom: 2px solid #e53e3e; padding-bottom: 5px;">
+              🌋 ${item.nombre || 'Sin nombre'}
+            </h3>
+            <div style="line-height: 1.6;">
+              <p><strong>📍 Coordenadas:</strong><br>
+                 Lat: ${coords[1].toFixed(6)}°<br>
+                 Lon: ${coords[0].toFixed(6)}°</p>
+              <p><strong>⛰️ Altura:</strong> ${item['altura (ms'] || 'N/A'} msnm</p>
+              <p><strong>📏 Diámetro:</strong> ${item['diámetro'] || 'N/A'} m</p>
+              <p><strong>📊 Estado:</strong>
+                 <span style="color: ${isActive ? '#e53e3e' : '#718096'}; font-weight: bold;">
+                   ${item.estado || 'N/A'}
+                 </span>
+              </p>
+              <p><strong>📐 Superficie:</strong> ${item.superficie || 'N/A'} km²</p>
+            </div>
+            <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+              <button onclick="createBufferAnalysis(${coords[0]}, ${coords[1]}, ${item.superficie || 50}, '${item.nombre}')"
+                      style="background: #e53e3e; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; width: 100%;">
+                🔍 Análisis de Zona de Influencia
+              </button>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        layerGroups.observatorios.addLayer(marker);
+      });
+
+      // Actualizar estadísticas
+      document.getElementById('total-observatorios').textContent = data.length;
+      document.getElementById('activos').textContent = activosCount;
+      document.getElementById('inactivos').textContent = inactivosCount;
+
+      layerGroups.observatorios.addTo(map);
+      console.log(`✅ Cargados ${data.length} observatorios vulcanológicos`);
+
+    } catch (error) {
+      console.error('Error cargando observatorios:', error);
+      showError('Error cargando observatorios vulcanológicos');
+    }
+  }
+
+  // Función para crear análisis de buffer
+  window.createBufferAnalysis = function(lon, lat, superficie, nombre) {
+    // Limpiar buffer anterior
+    if (currentBuffer) {
+      map.removeLayer(currentBuffer);
+    }
+
+    // Calcular radio del buffer
+    const superficieKm2 = superficie || 50;
+    const bufferRadius = Math.sqrt(superficieKm2) * 1000; // Radio en metros
+
+    // Crear buffer
+    currentBuffer = L.circle([lat, lon], {
+      radius: bufferRadius,
+      color: '#e53e3e',
+      weight: 3,
+      fillOpacity: 0.1,
+      dashArray: '10,5'
+    }).addTo(map);
+
+    // Popup del buffer
+    currentBuffer.bindPopup(`
+      <div style="text-align: center;">
+        <h4>🔍 Zona de Influencia</h4>
+        <p><strong>${nombre}</strong></p>
+        <p>Radio: ${(bufferRadius/1000).toFixed(2)} km</p>
+        <p>Área: ${superficieKm2} km²</p>
+        <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+          <button onclick="openReportFormForVolcano('${nombre}', ${lat}, ${lon})"
+                  style="background: #f56565; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; width: 100%;">
+            🚨 Reportar Problema en esta Zona
+          </button>
+        </div>
+      </div>
+    `).openPopup();
+
+    // Centrar mapa en el buffer
+    map.setView([lat, lon], 10);
+  };
+
+  // Función para abrir formulario de reporte preconfigurado para un volcán
+  window.openReportFormForVolcano = function(volcanoName, lat, lon) {
+    // Expandir panel de reportes si está colapsado
+    const panel = document.getElementById('reportPanel');
+    if (panel.classList.contains('collapsed')) {
+      toggleReportPanel();
+    }
+
+    // Pre-llenar información del volcán
+    document.getElementById('reportLocation').value = `Zona de influencia del ${volcanoName} (${lat.toFixed(6)}, ${lon.toFixed(6)})`;
+
+    // Crear marcador temporal
+    if (selectedLocationMarker) {
+      map.removeLayer(selectedLocationMarker);
+    }
+
+    selectedLocationMarker = L.marker([lat, lon], {
+      icon: L.icon({
+        iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+          <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
+            <path fill="#f56565" stroke="#fff" stroke-width="2" d="M12.5 0C5.6 0 0 5.6 0 12.5S12.5 41 12.5 41 25 19.4 25 12.5 19.4 0 12.5 0z"/>
+            <circle fill="#fff" cx="12.5" cy="12.5" r="6"/>
+          </svg>
+        `),
+        iconSize: [25, 41],
+        iconAnchor: [12, 41]
+      })
+    }).addTo(map);
+
+    // Scroll al formulario
+    panel.scrollTop = 0;
+  };
+
+  // Función para cargar capas adicionales (adaptada para L.geoJSON)
+  async function loadAdditionalLayer(layerName, tableName, color, nameField = 'nombre') {
+    try {
+      const data = await querySupabase(tableName, `geom,${nameField}`, '&limit=500'); // Aumentar límite
+
+      if (!data || data.length === 0) {
+        console.log(`No se encontraron datos para ${layerName}`);
+        return;
+      }
+
+      // Crear un grupo de capas temporal para esta capa
+      let currentLayerGroup = L.layerGroup();
+
+      data.forEach(item => {
+        if (!item.geom) return;
+
+        let geojsonData;
+        // Intentar parsear el item.geom a un objeto GeoJSON
+        try {
+            geojsonData = (typeof item.geom === 'string') ? JSON.parse(item.geom) : item.geom;
+        } catch (e) {
+            console.warn(`Error parseando GeoJSON para ${layerName} (${item[nameField] || 'sin nombre'}):`, e);
+            return; // Saltar este item si no se puede parsear
+        }
+
+        if (!geojsonData || !geojsonData.type || !geojsonData.coordinates) {
+            console.warn('Geometría inválida o incompleta para:', item[nameField]);
+            return;
+        }
+
+        // Usar L.geoJSON para manejar cualquier tipo de geometría GeoJSON
+        const leafletLayer = L.geoJSON(geojsonData, {
+            style: function(feature) {
+                return {
+                    color: color,
+                    weight: (feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString') ? 3 : 1, // Más grueso para líneas
+                    opacity: 0.7,
+                    fillOpacity: (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') ? 0.2 : 0 // Relleno para polígonos
+                };
+            },
+            onEachFeature: function(feature, layer) {
+                if (item[nameField]) {
+                    layer.bindPopup(`<b>${layerName}</b><br>${item[nameField]}`);
+                }
+            },
+            pointToLayer: function (feature, latlng) {
+                // Personalizar cómo se dibujan los puntos (ej. para aeropuertos o poblaciones si son puntos)
+                return L.circleMarker(latlng, {
+                    radius: 5,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                });
+            }
+        });
+
+        currentLayerGroup.addLayer(leafletLayer);
+      });
+
+      // Asignar el grupo de capas al layerGroups global
+      layerGroups[layerName.toLowerCase().replace(/[^a-z]/g, '')] = currentLayerGroup;
+
+      // Añadir al mapa si el checkbox está marcado
+      if (document.getElementById(layerName.toLowerCase().replace(/[^a-z]/g, ''))?.checked) {
+        currentLayerGroup.addTo(map);
+      }
+
+      console.log(`✅ Cargada capa: ${layerName}`);
+
+    } catch (error) {
+      console.warn(`⚠️ No se pudo cargar ${layerName}:`, error.message);
+      showError(`Error cargando ${layerName}: ${error.message}`);
+    }
+  }
+
+  // Función para cargar reportes desde Supabase al inicio
+  async function loadReportsFromSupabase() {
+      try {
+          showLoading('Cargando reportes de emergencia...');
+          const data = await querySupabase('reportes_emergencia', '*'); // Cargar todos los campos
+
+          if (data && data.length > 0) {
+              // Limpiar reportes y marcadores previos antes de cargar
+              reports = [];
+              layerGroups.reportes.clearLayers();
+              reportMarkers = {};
+
+              // Ordenar por fecha de creación descendente para que los más recientes aparezcan primero
+              data.sort((a, b) => new Date(b.fecha_creacion) - new Date(a.fecha_creacion));
+
+              data.forEach(report => {
+                  reports.push(report);
+                  addReportToMap(report);
+              });
+              layerGroups.reportes.addTo(map); // Asegurar que la capa de reportes esté en el mapa
+              console.log(`✅ Cargados ${data.length} reportes de emergencia desde Supabase.`);
+          } else {
+              console.log('No se encontraron reportes de emergencia en Supabase.');
+          }
+          updateReportsList();
+          updateReportStats();
+      } catch (error) {
+          console.error('Error al cargar reportes de emergencia desde Supabase:', error);
+          showError('Error al cargar reportes de emergencia.');
+      } finally {
+          hideLoading();
+      }
+  }
+
+
+  // Función para mostrar/ocultar loading
+  function showLoading(message) {
+    const loading = document.getElementById('loading');
+    if (loading) {
+      loading.textContent = message;
+      loading.style.display = 'block';
+    }
+  }
+
+  function hideLoading() {
+    const loading = document.getElementById('loading');
+    if (loading) {
+      loading.style.display = 'none';
+    }
+  }
+
+  // Función para mostrar errores
+  function showError(message) {
+    const existingError = document.querySelector('.error-message');
+    if (existingError) {
+      existingError.remove();
+    }
+
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-message';
+    errorDiv.textContent = message;
+    document.body.appendChild(errorDiv);
+
+    setTimeout(() => {
+      errorDiv.remove();
+    }, 5000);
+  }
+
+  // Función para cargar todas las capas
+  async function loadAllLayers() {
+    showLoading('Conectando con Supabase...');
+
+    try {
+      // Cargar observatorios (principal)
+      await loadObservatorios();
+
+      // Cargar capas adicionales
+      showLoading('Cargando capas adicionales...');
+      await Promise.allSettled([
+        loadAdditionalLayer('vias', 'vias', '#38a169', 'nombre_vias'), // Updated to use 'nombre_vias'
+        loadAdditionalLayer('poblaciones', 'poblaciones2', '#d69e2e'),
+        loadAdditionalLayer('aeropuertos', 'aeropuertos', '#805ad5'),
+        loadAdditionalLayer('cantones', 'cantones', '#3182ce', 'nombre_can'), // Updated to use 'nombre_can'
+      ]);
+
+      // Cargar reportes de emergencia desde Supabase
+      await loadReportsFromSupabase();
+
+    } catch (error) {
+      console.error('Error cargando capas:', error);
+      showError('Error general cargando datos');
+    } finally {
+      hideLoading();
+    }
+  }
+
+  // Control de capas
+  function setupLayerControls() {
+    Object.keys(layerGroups).forEach(layerName => {
+      const checkbox = document.getElementById(layerName);
+      if (checkbox) {
+        checkbox.addEventListener('change', function() {
+          if (this.checked) {
+            map.addLayer(layerGroups[layerName]);
+          } else {
+            map.removeLayer(layerGroups[layerName]);
+          }
+        });
+      }
+    });
+  }
+
+  // Control de capas base
+  L.control.layers(baseLayers).addTo(map);
+
+  // Estilos dinámicos
+  const style = document.createElement('style');
+  style.textContent = `
+    .observatory-tooltip {
+      background: rgba(229, 62, 62, 0.9) !important;
+      border: none !important;
+      color: white !important;
+      font-weight: bold !important;
+      border-radius: 4px !important;
+      padding: 4px 8px !important;
+      font-size: 12px !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+    }
+
+    .observatory-tooltip::before {
+      border-top-color: rgba(229, 62, 62, 0.9) !important;
+    }
+
+    .leaflet-popup-content {
+      margin: 8px 12px !important;
+      line-height: 1.4 !important;
+    }
+
+    .leaflet-popup-content h3 {
+      margin: 0 0 10px 0 !important;
+    }
+  `;
+  document.head.appendChild(style);
+
+  // Inicializar aplicación
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Iniciando Geoportal Ecuador con Sistema de Reportes...');
+    setupLayerControls();
+    loadAllLayers(); // Cargar todas las capas, incluyendo reportes de Supabase
+  });
+
+  // Manejo de errores globales
+  window.onerror = function(msg, url, lineNo, columnNo, error) {
+    console.error('Error global:', error);
+    showError('Error inesperado en la aplicación');
+    return false;
+  };
+
+</script>
+</body>
+</html>
